@@ -1,4 +1,4 @@
-const tabs=['All','Elk','Whitetail','Mule Deer','Big Game','Wolves & Predators','Fishing','Conservation','Regulations','Research'];
+const tabs=['All','Elk','Whitetail','Mule Deer','Big Game','Wolves & Predators','Fishing','Conservation','Regulations','Research','Metrics'];
 let active='All', stories=[], clusters=[], snapshot={};
 const $=s=>document.querySelector(s);
 const esc=s=>(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -36,13 +36,22 @@ function renderList(id,arr){
   $(id).innerHTML=(arr||[]).length?(arr||[]).map(x=>`<a href="${x.link}" target="_blank" rel="noopener"><small>${esc((x.states||[])[0]||x.source)} • ${ago(x.publishedAt)}</small><span>${esc(x.title)}</span></a>`).join(''):'<span class="muted">No recent signals.</span>';
 }
 function render(){
+  const metrics=active==='Metrics';
+  $('#newsView').hidden=metrics;
+  $('#metricsView').hidden=!metrics;
+  if(metrics){
+    renderMetricsTopics();
+    return;
+  }
   const arr=current(), state=$('#stateFilter').value, mode=$('#viewMode').value;
   $('#feedTitle').textContent=state?`${state} • ${active==='All'?'All Outdoor':active}`:(active==='All'?'Latest intelligence':active);
   $('#resultCount').textContent=`${arr.length} ${mode==='clusters'?'events':'stories'}`;
   $('#lead').innerHTML=arr[0]?card(arr[0],1,true):'<div class="empty">No stories match these filters.</div>';
   $('#stories').innerHTML=arr.slice(1).map((x,i)=>card(x,i+2)).join('');
-  const counts={};arr.forEach(x=>(x.tags||[]).forEach(t=>counts[t]=(counts[t]||0)+1));
-  $('#trends').innerHTML=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([t,n])=>`<span class="trend">${esc(t)} <b>${n}</b></span>`).join('');
+}
+function renderMetricsTopics(){
+  const counts={};stories.filter(x=>inWindow(x,'7')).forEach(x=>(x.tags||[]).forEach(t=>counts[t]=(counts[t]||0)+1));
+  $('#trends').innerHTML=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,12).map(([t,n])=>`<span class="trend">${esc(t)} <b>${n}</b></span>`).join('')||'<span class="muted">No recent signals.</span>';
 }
 function fillFilters(){
   const ps=$('#sourceFilter').value,pst=$('#stateFilter').value;
@@ -57,7 +66,7 @@ function renderSnapshot(){
   $('#signal7').textContent=snapshot.last7Days??0;$('#multiSource').textContent=snapshot.multiSourceClusters??0;$('#regAlerts').textContent=snapshot.regulationAlerts??0;$('#researchSignals').textContent=snapshot.researchSignals??0;$('#predatorSignals').textContent=snapshot.predatorSignals??0;
   const max=Math.max(1,...(snapshot.topStates||[]).map(x=>x.count));
   $('#statePulse').innerHTML=(snapshot.topStates||[]).map(x=>`<button data-statejump="${esc(x.name)}"><span>${esc(x.name)}</span><i><em style="width:${Math.round(x.count/max*100)}%"></em></i><b>${x.count}</b></button>`).join('')||'<span class="muted">No state signals yet.</span>';
-  document.querySelectorAll('[data-statejump]').forEach(b=>b.onclick=()=>{$('#stateFilter').value=b.dataset.statejump;render()});
+  document.querySelectorAll('[data-statejump]').forEach(b=>b.onclick=()=>{active='All';renderTabs();$('#stateFilter').value=b.dataset.statejump;render()});
   renderList('#regulationList',snapshot.latestRegulations);renderList('#researchList',snapshot.latestResearch);
 }
 async function load(force=false){

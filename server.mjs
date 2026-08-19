@@ -125,7 +125,38 @@ const broadQueries = [
   {name:'Fishing Wire',query:'(fishing OR fisheries OR trout OR bass OR salmon OR walleye) conservation outdoors when:365d'},
   {name:'Conservation Wire',query:'("wildlife conservation" OR habitat OR "public lands" OR "migration corridor" OR CWD OR EHD) hunting when:365d'},
   {name:'Regulations Wire',query:'("hunting regulations" OR "tag allocation" OR "draw odds" OR "season changes" OR "hunting legislation") when:365d'},
-  {name:'Research Wire',query:'(elk OR deer OR wolves OR wildlife) (study OR research OR population OR migration OR mortality) when:365d'}
+  {name:'Research Wire',query:'(elk OR deer OR wolves OR wildlife) (study OR research OR population OR migration OR mortality) when:365d'},
+
+  // Public-land policy discovery: catches major federal actions that matter to hunters even when
+  // the headline never says "hunting" (for example Roadless Rule, NEPA, logging, access, land-use rules).
+  {name:'Public Lands Policy Wire',query:'("public lands" OR "national forest" OR "national forests" OR roadless OR wilderness OR BLM OR "Forest Service") (rule OR repeal OR rescind OR policy OR proposal OR legislation OR access OR logging OR mining OR development) when:365d'},
+  {name:'Federal Rulemaking Wire',query:'(USDA OR "Forest Service" OR BLM OR "Fish and Wildlife Service") ("Federal Register" OR "public comment" OR rulemaking OR "proposed rule" OR "final rule") (land OR forest OR wildlife OR habitat OR recreation) when:365d'},
+  {name:'Roadless & Forest Policy Wire',query:'("Roadless Rule" OR "Roadless Area Conservation Rule" OR roadless OR "forest management") (USDA OR "Forest Service" OR logging OR roads OR wildfire OR habitat) when:365d'},
+  {name:'Outdoor Legislation Wire',query:'(Congress OR Senate OR House OR legislation OR bill OR amendment) ("public lands" OR hunting OR fishing OR wildlife OR habitat OR "national forest") when:365d'},
+  {name:'Access & Habitat Policy Wire',query:'(access OR easement OR roadless OR roads OR closure OR development OR logging OR mining OR drilling) ("public land" OR "public lands" OR "national forest" OR wildlife OR habitat) when:365d'}
+];
+
+// Hunter-impact discovery. These deliberately look beyond stories explicitly labeled as "hunting".
+// The query must still intersect land, wildlife, access, habitat, fish, game, or recreation terms so
+// Outdoor Intel catches consequential policy and environmental developments without becoming generic news.
+const hunterImpactQueries = [
+  {name:'Federal Public Lands Wire',query:'(USDA OR BLM OR "Forest Service" OR "Interior Department" OR "National Park Service") ("public lands" OR "national forest" OR wilderness OR habitat OR wildlife OR recreation) (rule OR policy OR proposal OR plan OR closure OR access OR sale OR transfer) when:365d'},
+  {name:'Federal Register Outdoors Wire',query:'site:federalregister.gov (wildlife OR habitat OR "public lands" OR "national forest" OR hunting OR fishing OR endangered) (rule OR notice OR proposal OR permit OR plan) when:365d'},
+  {name:'Congress Outdoors Wire',query:'site:congress.gov (wildlife OR hunting OR fishing OR "public lands" OR habitat OR conservation OR "national forest") (bill OR act OR resolution) when:365d'},
+  {name:'Court & Legal Outdoors Wire',query:'(court OR judge OR lawsuit OR ruling OR injunction OR settlement) (wildlife OR hunting OR fishing OR "public lands" OR "national forest" OR habitat OR endangered OR wolves) when:365d'},
+  {name:'Access & Closure Wire',query:'(closure OR closed OR reopening OR access OR easement OR road OR gate OR trailhead) (hunting OR fishing OR wildlife OR "public land" OR "public lands" OR "national forest") when:365d'},
+  {name:'Land Sale & Transfer Wire',query:'(sale OR transfer OR disposal OR exchange OR acquisition) ("public land" OR "public lands" OR BLM OR "national forest" OR wildlife habitat) when:365d'},
+  {name:'Wildfire & Hunting Access Wire',query:'(wildfire OR "wildland fire" OR burn OR closure OR "fire restrictions") (hunting OR fishing OR wildlife OR habitat OR "national forest" OR BLM) when:365d'},
+  {name:'Drought & Water Wildlife Wire',query:'(drought OR water OR streamflow OR reservoir OR snowpack) (wildlife OR elk OR deer OR fisheries OR fish OR habitat OR hunting OR fishing) when:365d'},
+  {name:'Energy & Habitat Wire',query:'(drilling OR oil OR gas OR solar OR wind OR transmission OR energy) (wildlife OR habitat OR migration OR "public lands" OR hunting OR fishing) when:365d'},
+  {name:'Mining & Habitat Wire',query:'(mine OR mining OR mineral OR lithium OR copper OR uranium) (wildlife OR habitat OR migration OR "public lands" OR hunting OR fishing) when:365d'},
+  {name:'Logging & Forest Habitat Wire',query:'(logging OR timber OR thinning OR "forest management" OR roads) (wildlife OR habitat OR elk OR deer OR hunting OR "national forest") when:365d'},
+  {name:'Endangered Species Policy Wire',query:'("Endangered Species Act" OR endangered OR threatened OR delist OR delisting OR listing) (wildlife OR wolf OR grizzly OR fish OR habitat OR hunting) when:365d'},
+  {name:'Wildlife Disease Wire',query:'(CWD OR "chronic wasting disease" OR EHD OR "avian influenza" OR disease) (deer OR elk OR wildlife OR waterfowl OR hunting) when:365d'},
+  {name:'Wildlife Funding Wire',query:'(funding OR budget OR grant OR appropriations) (wildlife OR habitat OR conservation OR hunting OR fishing OR "public lands") when:365d'},
+  {name:'Tribal Wildlife Management Wire',query:'(tribal OR tribe OR treaty OR co-management OR comanagement) (wildlife OR hunting OR fishing OR elk OR deer OR salmon OR "public lands") when:365d'},
+  {name:'Agriculture & Wildlife Habitat Wire',query:'(agriculture OR farm OR ranch OR grazing OR CRP OR "Farm Bill") (wildlife OR habitat OR deer OR elk OR waterfowl OR hunting) when:365d'},
+  {name:'Wildlife Ballot & State Law Wire',query:'(ballot OR initiative OR referendum OR governor OR legislature OR lawmakers) (hunting OR fishing OR wildlife OR wolves OR cougar OR bear OR "public lands") when:365d'}
 ];
 
 // Species + state discovery. These feeds deliberately search beyond agency sites so a state/species
@@ -148,7 +179,7 @@ const speciesStateQueries = Object.entries(speciesStateCoverage).flatMap(([speci
   }))
 );
 
-const allFeeds = [...publisherQueries, ...stateAgencies, ...directStateQueries, ...broadQueries, ...speciesStateQueries];
+const allFeeds = [...publisherQueries, ...stateAgencies, ...directStateQueries, ...broadQueries, ...hunterImpactQueries, ...speciesStateQueries];
 
 const taxonomy = {
   'Elk': ['elk','wapiti'],
@@ -157,8 +188,8 @@ const taxonomy = {
   'Big Game': ['big game','pronghorn','antelope','moose','caribou','bighorn','sheep','mountain goat'],
   'Wolves & Predators': ['wolf','wolves','coyote','cougar','mountain lion','grizzly','predator','black bear'],
   'Fishing': ['fishing','fishery','fisheries','angler','trout','bass','salmon','walleye','steelhead','crappie','catfish'],
-  'Conservation': ['conservation','habitat','public land','public lands','migration corridor','wildlife crossing','winter range','access','restoration'],
-  'Regulations': ['regulation','season','draw','tag','license','quota','legislation','ban','rule change','application deadline','permit'],
+  'Conservation': ['conservation','habitat','public land','public lands','migration corridor','wildlife crossing','winter range','access','restoration','roadless','national forest','national forests','wilderness','forest management','logging','land management','easement','land transfer','land sale','wildfire','drought','water','streamflow','snowpack','drilling','mining','energy development','grazing','crp','farm bill'],
+  'Regulations': ['regulation','season','draw','tag','license','quota','legislation','bill','law','ban','rule change','application deadline','permit','proposed rule','final rule','rulemaking','federal register','public comment','repeal','rescind','rescission','court','lawsuit','ruling','injunction','ballot','initiative','referendum','closure','closed','reopening','delist','delisting'],
   'Research': ['study','research','survey','population estimate','mortality','recruitment','migration','disease','cwd','ehd','chronic wasting']
 };
 
@@ -223,7 +254,11 @@ function relevanceScore(story) {
     [['elk'],18], [['whitetail','white-tailed'],18], [['mule deer'],18],
     [['wolf','wolves'],14], [['cwd','ehd','chronic wasting','disease'],12],
     [['regulation','draw','tag','license','season','quota','permit'],12],
-    [['conservation','habitat','public land','migration','access'],10], [['study','research','population','mortality'],8]
+    [['conservation','habitat','public land','migration','access','roadless','national forest','logging','wilderness'],10],
+    [['rulemaking','proposed rule','final rule','federal register','public comment','repeal','rescind','rescission'],14],
+    [['court','lawsuit','ruling','injunction','ballot','initiative','referendum','land transfer','land sale','closure'],12],
+    [['wildfire','drought','water','drilling','mining','energy','grazing','farm bill','endangered','delist'],9],
+    [['study','research','population','mortality'],8]
   ];
   for (const [terms,w] of weights) if (terms.some(t=>text.includes(t))) s += w;
   if (prioritySources.has(story.source)) s += 8;
@@ -351,7 +386,7 @@ function buildSnapshot(stories, clusters){
 
 async function fetchQuery(feed) {
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(feed.query)}&hl=en-US&gl=US&ceid=US:en`;
-  const r = await fetch(url, { headers: { 'user-agent':'OutdoorIntel/3.0 (+local dashboard)' }, signal: AbortSignal.timeout(4500) });
+  const r = await fetch(url, { headers: { 'user-agent':'OutdoorIntel/3.3 (+local dashboard)' }, signal: AbortSignal.timeout(4500) });
   if (!r.ok) throw new Error(`${feed.name}: ${r.status}`);
   const xml = await r.text();
   return parseRss(xml, feed.forceSource ? feed.name : '').slice(0,12).map(st => ({...st, queryGroup:feed.name, stateHint:feed.stateHint || ''}));
@@ -419,13 +454,13 @@ const server = http.createServer(async (req,res) => {
         uniqueSourceCount:uniqueSources.size,
         stateAgencyCount:stateAgencies.length,
         states,
-        version:'3.0.0',
+        version:'3.3.0',
         feedErrors:data.errors.length
       }));
     }
     if (u.pathname === '/health') {
       res.writeHead(200, {'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true, version:'3.1-production', refreshedAt:cache.at?new Date(cache.at).toISOString():null, stories:cache.stories.length, refreshMinutes:REFRESH_MINUTES}));
+      return res.end(JSON.stringify({ok:true, version:'3.3-production', refreshedAt:cache.at?new Date(cache.at).toISOString():null, stories:cache.stories.length, refreshMinutes:REFRESH_MINUTES}));
     }
     if (u.pathname === '/robots.txt') {
       const site=(process.env.SITE_URL||'').replace(/\/$/,'');
@@ -450,7 +485,7 @@ const server = http.createServer(async (req,res) => {
   }
 });
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\nOutdoor Intel production → http://0.0.0.0:${PORT}\nWatching ${allFeeds.length} discovery feeds across ${stateAgencies.length} state wildlife agencies.\nAutomatic refresh: every ${REFRESH_MINUTES} minutes.\n`);
+  console.log(`\nOutdoor Intel 3.3 production → http://0.0.0.0:${PORT}\nWatching ${allFeeds.length} discovery feeds across ${stateAgencies.length} state wildlife agencies.\nAutomatic refresh: every ${REFRESH_MINUTES} minutes.\n`);
   void scheduledRefresh();
   const timer=setInterval(() => void scheduledRefresh(), REFRESH_MINUTES*60*1000);
   timer.unref?.();

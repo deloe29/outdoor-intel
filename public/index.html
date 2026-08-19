@@ -15,49 +15,61 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="brandmark">OI</span><div><strong>OUTDOOR INTEL</strong><small>VERSION 3.0 • HUNT • FISH • CONSERVE</small></div></div>
+  <div class="brand"><span class="brandmark">OI</span><div><strong>OUTDOOR INTEL</strong><small>VERSION 3.3 • HUNT • FISH • CONSERVE</small></div></div>
   <div class="top-actions"><span id="status" class="status"><i></i> Loading live intel</span><button id="refresh">Refresh</button></div>
 </header>
 <nav id="tabs" class="tabs"></nav>
 <main>
-  <section class="hero">
-    <div><div class="eyebrow">NORTH AMERICAN OUTDOOR INTELLIGENCE</div><h1>The outdoor world.<br><em>One signal.</em></h1><p>Live hunting, fishing, wildlife, conservation, regulation and research coverage — clustered across publishers and filtered to what matters.</p></div>
-    <div class="hero-stats"><div><b id="storyCount">—</b><span>stories indexed</span></div><div><b id="clusterCount">—</b><span>events clustered</span></div><div><b id="sourceCount">—</b><span>feeds watched</span></div><div><b id="lastUpdated">—</b><span>last refresh</span></div></div>
-  </section>
+  <div id="newsView">
+    <section class="hero hero-clean">
+      <div><div class="eyebrow">NORTH AMERICAN OUTDOOR INTELLIGENCE</div><h1>The outdoor world.<br><em>One signal.</em></h1><p>Live hunting, fishing, wildlife, conservation, regulation and research coverage — clustered across publishers and filtered to what matters.</p></div>
+    </section>
 
-  <section class="pulse-grid">
-    <div class="pulse"><span>7-DAY SIGNAL</span><b id="signal7">—</b><small>recent stories</small></div>
-    <div class="pulse"><span>MULTI-SOURCE</span><b id="multiSource">—</b><small>clustered events</small></div>
-    <div class="pulse"><span>REGULATION WATCH</span><b id="regAlerts">—</b><small>recent alerts</small></div>
-    <div class="pulse"><span>RESEARCH WATCH</span><b id="researchSignals">—</b><small>recent signals</small></div>
-    <div class="pulse"><span>PREDATOR WATCH</span><b id="predatorSignals">—</b><small>recent signals</small></div>
-  </section>
+    <section class="toolbar">
+      <div class="search"><span>⌕</span><input id="search" placeholder="Search elk, Colorado, CWD, public lands…" /></div>
+      <select id="stateFilter"><option value="">All states</option></select>
+      <select id="sourceFilter"><option value="">All sources</option></select>
+      <select id="timeFilter"><option value="7">Last 7 days</option><option value="1">Last 24 hours</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 1 year</option><option value="all">All indexed</option></select>
+      <select id="sort"><option value="new" selected>Newest first</option><option value="top">Top stories</option><option value="relevance">Most relevant</option></select>
+      <select id="viewMode"><option value="clusters" selected>Clustered events</option><option value="stories">Individual stories</option></select>
+    </section>
 
-  <section class="toolbar">
-    <div class="search"><span>⌕</span><input id="search" placeholder="Search elk, Colorado, CWD, public lands…" /></div>
-    <select id="stateFilter"><option value="">All states</option></select>
-    <select id="sourceFilter"><option value="">All sources</option></select>
-    <select id="timeFilter"><option value="7">Last 7 days</option><option value="1">Last 24 hours</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 1 year</option><option value="all">All indexed</option></select>
-    <select id="sort"><option value="new" selected>Newest first</option><option value="top">Top stories</option><option value="relevance">Most relevant</option></select>
-    <select id="viewMode"><option value="clusters" selected>Clustered events</option><option value="stories">Individual stories</option></select>
-  </section>
+    <section class="layout">
+      <div>
+        <div class="section-head"><div><span class="kicker">INTELLIGENCE FEED</span><h2 id="feedTitle">Latest stories</h2></div><span id="resultCount"></span></div>
+        <div id="lead" class="lead"></div>
+        <div id="stories" class="stories"></div>
+      </div>
+      <aside>
+        <div class="panel"><span class="kicker">LATEST REGULATION INTEL</span><h3>Rules & opportunity</h3><div id="regulationList" class="intel-list"></div></div>
+        <div class="panel"><span class="kicker">LATEST RESEARCH</span><h3>Wildlife science</h3><div id="researchList" class="intel-list"></div></div>
+        <div class="panel note"><b>Hunter-impact discovery</b><p>Outdoor Intel watches not only hunting publications, but also policy, land-management, access, habitat, legal, wildfire, water, disease and other developments that can materially affect hunters and anglers.</p></div>
+        <div class="panel note"><b>Data layer</b><p>This build reports live intelligence derived from the indexed news stream. It does <strong>not</strong> fabricate herd counts, draw odds or harvest statistics.</p></div>
+      </aside>
+    </section>
+  </div>
 
-  <section class="layout">
-    <div>
-      <div class="section-head"><div><span class="kicker">INTELLIGENCE FEED</span><h2 id="feedTitle">Latest stories</h2></div><span id="resultCount"></span></div>
-      <div id="lead" class="lead"></div>
-      <div id="stories" class="stories"></div>
+  <section id="metricsView" class="metrics-view" hidden>
+    <div class="metrics-head"><span class="kicker">SITE METRICS</span><h1>Behind the feed.</h1><p>Operational and coverage metrics are kept here so the main news dashboard stays focused on stories.</p></div>
+    <div class="metrics-grid primary-metrics">
+      <div class="metric-card"><b id="storyCount">—</b><span>stories indexed</span></div>
+      <div class="metric-card"><b id="clusterCount">—</b><span>events clustered</span></div>
+      <div class="metric-card"><b id="sourceCount">—</b><span>feeds watched</span></div>
+      <div class="metric-card"><b id="lastUpdated">—</b><span>last refresh</span></div>
     </div>
-    <aside>
+    <div class="metrics-grid signal-metrics">
+      <div class="metric-card"><span>7-DAY SIGNAL</span><b id="signal7">—</b><small>recent stories</small></div>
+      <div class="metric-card"><span>MULTI-SOURCE</span><b id="multiSource">—</b><small>clustered events</small></div>
+      <div class="metric-card"><span>REGULATION WATCH</span><b id="regAlerts">—</b><small>recent alerts</small></div>
+      <div class="metric-card"><span>RESEARCH WATCH</span><b id="researchSignals">—</b><small>recent signals</small></div>
+      <div class="metric-card"><span>PREDATOR WATCH</span><b id="predatorSignals">—</b><small>recent signals</small></div>
+    </div>
+    <div class="metrics-detail-grid">
       <div class="panel"><span class="kicker">STATE PULSE</span><h3>Most active states</h3><div id="statePulse" class="metric-list"></div></div>
       <div class="panel"><span class="kicker">SIGNAL WATCH</span><h3>Trending topics</h3><div id="trends" class="trends"></div></div>
-      <div class="panel"><span class="kicker">LATEST REGULATION INTEL</span><h3>Rules & opportunity</h3><div id="regulationList" class="intel-list"></div></div>
-      <div class="panel"><span class="kicker">LATEST RESEARCH</span><h3>Wildlife science</h3><div id="researchList" class="intel-list"></div></div>
-      <div class="panel note"><b>What changed in 3.0</b><p>Stories covering the same development are clustered into one event, multi-source coverage boosts importance, each item gets a concise summary and a “Why hunters should care” explanation, and the sidebar now surfaces state, regulation and research signals.</p></div>
-      <div class="panel note"><b>Data layer</b><p>This build reports live intelligence derived from the indexed news stream. It does <strong>not</strong> fabricate herd counts, draw odds or harvest statistics. The architecture is ready for direct agency-dataset adapters as those are added.</p></div>
-    </aside>
+    </div>
   </section>
 </main>
-<footer>OUTDOOR INTEL 3.0 <span>•</span> Original publishers retain their content <span>•</span> Built for signal, not scroll.</footer>
+<footer>OUTDOOR INTEL 3.3 <span>•</span> Original publishers retain their content <span>•</span> Built for signal, not scroll.</footer>
 <script type="module" src="/app.js"></script>
 </body></html>
