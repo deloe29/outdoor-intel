@@ -1,4 +1,4 @@
-# Outdoor Intel 3.3
+# Outdoor Intel 3.4
 
 A no-API-key outdoor news aggregation dashboard for hunting, fishing, conservation, wildlife regulations and research.
 
@@ -7,7 +7,7 @@ A no-API-key outdoor news aggregation dashboard for hunting, fishing, conservati
 Requires Node.js 18+.
 
 ```bash
-cd outdoor-intel-v3.3
+cd outdoor-intel-v3.4
 npm start
 ```
 
@@ -15,7 +15,7 @@ Open http://localhost:3000
 
 No `npm install` is required because the project has zero external npm dependencies.
 
-## What 3.3 changes
+## What 3.4 changes
 
 - Expands discovery from "hunting news" to **news that materially affects hunters and anglers**.
 - Adds tightly-scoped discovery wires for public-land policy, federal rulemaking, courts/legal decisions, access/closures, land sales/transfers, wildfire, drought/water, energy, mining, logging, endangered-species actions, wildlife disease, conservation funding, tribal wildlife management, agriculture/Farm Bill habitat issues, and ballot/state-law changes.
@@ -46,3 +46,10 @@ The metrics are derived from the indexed story stream. The app does not invent h
 ## Ingestion
 
 The current build uses Google News RSS as a no-key discovery layer. Every story links to the original publisher. Individual feed failures are isolated so one unavailable query does not take down the dashboard.
+
+
+### Event clustering upgrade
+Version 3.4 clusters coverage by the underlying event rather than relying mainly on headline similarity. It uses named policy/entity phrases, actions (propose/repeal/approve/block/close/etc.), topic overlap, geography, and publication proximity. Different headlines covering the same Roadless Rule action should now collapse into one multi-source event.
+
+### Summary upgrade
+Summaries now prefer concrete factual sentences containing the actors, action, place, numbers/dates, and consequences. Cluster summaries can combine distinct facts from multiple outlets while still linking readers to the original publishers. The “Why hunters should care” text is also selected from story-specific signals such as access, public lands, disease, tags, closures, predators, habitat, and research instead of generic category boilerplate.

@@ -284,7 +284,7 @@ function dedupe(stories) {
   return [...seen.values()];
 }
 
-const stopWords = new Set('the a an to of in for on and with new from by at as is are was were be this that after over into about says say will amid its their his her our your how why what who when where more most up down out'.split(' '));
+const stopWords = new Set('the a an to of in for on and with new from by at as is are was were be this that after over into about says say will amid its their his her our your how why what who when where more most up down out could would should may might has have had'.split(' '));
 function words(text='') {
   return new Set(text.toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>2 && !stopWords.has(w)));
 }
@@ -293,33 +293,128 @@ function jaccard(a,b) {
   let inter=0; for(const x of A) if(B.has(x)) inter++;
   return inter/(A.size+B.size-inter);
 }
-function sentence(text='') {
-  const clean=text.replace(/\s+/g,' ').trim();
-  if(!clean) return '';
-  const parts=clean.split(/(?<=[.!?])\s+/).filter(Boolean);
-  return (parts[0]||clean).slice(0,280).replace(/\s+\S*$/,'').trim();
+function cleanText(text='') {
+  return text.replace(/\s+/g,' ').replace(/\s+([,.!?;:])/g,'$1').trim();
+}
+function sentences(text='') {
+  return cleanText(text).split(/(?<=[.!?])\s+/).map(x=>x.trim()).filter(Boolean);
+}
+function meaningfulTerms(text='') {
+  return [...words(text)].filter(w=>!/^\d+$/.test(w));
+}
+const eventPhrases = [
+  'roadless rule','endangered species act','chronic wasting disease','public lands','public land','national forest','national forests',
+  'forest service','fish and wildlife service','bureau of land management','federal register','public comment','land transfer','land sale',
+  'hunting season','tag allocation','license allocation','application deadline','migration corridor','wildlife crossing','winter range',
+  'mule deer','white-tailed deer','whitetail deer','mountain lion','grizzly bear','gray wolf','grey wolf','farm bill'
+];
+const actionGroups = {
+  repeal:['repeal','repeals','repealed','repealing','rescind','rescinds','rescinded','rescission','rollback','roll back','scrap','eliminate'],
+  propose:['proposal','proposes','proposed','proposing','advance','advances','advanced','rulemaking','public comment'],
+  approve:['approve','approves','approved','adopt','adopts','adopted','pass','passes','passed','sign','signs','signed','enact','enacted'],
+  block:['block','blocks','blocked','halt','halts','halted','pause','paused','injunction','overturn','overturned','reject','rejected'],
+  close:['close','closes','closed','closure','restrict','restricted','restriction','ban','bans','banned'],
+  reopen:['reopen','reopens','reopened','restore','restores','restored'],
+  expand:['expand','expands','expanded','increase','increases','increased','raise','raises','raised'],
+  reduce:['reduce','reduces','reduced','cut','cuts','decrease','decreases','decreased'],
+  list:['list','lists','listed','listing','delist','delists','delisted','delisting'],
+  sue:['lawsuit','sue','sues','sued','court','ruling','rules','ruled'],
+  report:['report','reports','reported','release','releases','released','survey','estimate','study','finds','found']
+};
+function phraseHits(text='') {
+  const t=text.toLowerCase();
+  return eventPhrases.filter(p=>t.includes(p));
+}
+function actionHits(text='') {
+  const t=text.toLowerCase();
+  const out=[];
+  for(const [group,terms] of Object.entries(actionGroups)) if(terms.some(x=>t.includes(x))) out.push(group);
+  return out;
+}
+function eventSignature(story) {
+  const text=`${story.title} ${story.description||''}`;
+  const phrases=phraseHits(text);
+  const actions=actionHits(text);
+  const tags=(story.tags||[]).filter(x=>x!=='Big Game');
+  const states=story.states||[];
+  const titleTerms=meaningfulTerms(story.title).filter(w=>w.length>3).slice(0,14);
+  return {phrases,actions,tags,states,titleTerms};
+}
+function overlapRatio(a=[],b=[]) {
+  if(!a.length||!b.length) return 0;
+  const B=new Set(b); let n=0; for(const x of a) if(B.has(x)) n++;
+  return n/Math.min(a.length,b.length);
+}
+function eventSimilarity(a,b) {
+  const A=a.eventSig||eventSignature(a), B=b.eventSig||eventSignature(b);
+  const titleSim=jaccard(a.title,b.title);
+  const descSim=jaccard(`${a.title} ${a.description||''}`,`${b.title} ${b.description||''}`);
+  const phrase=overlapRatio(A.phrases,B.phrases);
+  const action=overlapRatio(A.actions,B.actions);
+  const topic=overlapRatio(A.tags,B.tags);
+  const state=overlapRatio(A.states,B.states);
+  const keyTerms=overlapRatio(A.titleTerms,B.titleTerms);
+  let score=titleSim*.24+descSim*.18+phrase*.25+action*.13+topic*.08+state*.04+keyTerms*.08;
+  // Strong named-policy/entity matches are usually the same event even when headlines use different verbs.
+  if(phrase>=1 && A.phrases.length && B.phrases.length) score+=.18;
+  if(action>=1 && A.actions.length && B.actions.length) score+=.08;
+  return Math.min(1,score);
+}
+function bestFactSentence(story) {
+  const candidates=sentences(story.description||'').filter(s=>s.length>=45 && s.toLowerCase()!==story.title.toLowerCase());
+  if(!candidates.length) return '';
+  const titleWords=words(story.title);
+  const score=s=>{
+    const ws=words(s); let overlap=0; for(const w of ws) if(titleWords.has(w)) overlap++;
+    const concrete=(s.match(/\b(?:\d[\d,.]*|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|acres?|percent|%|million|billion)\b/gi)||[]).length;
+    const actions=actionHits(s).length;
+    return overlap*2+concrete*2+actions*2+Math.min(2,s.length/120);
+  };
+  return [...candidates].sort((a,b)=>score(b)-score(a))[0];
 }
 function summarize(story) {
-  const d=sentence(story.description||'');
-  if(d && d.toLowerCase()!==story.title.toLowerCase()) return d + (/[.!?]$/.test(d)?'':'.');
+  const fact=bestFactSentence(story);
+  if(fact) {
+    const clipped=fact.length>330 ? fact.slice(0,327).replace(/\s+\S*$/,'')+'…' : fact;
+    return /[.!?…]$/.test(clipped)?clipped:clipped+'.';
+  }
   const where=(story.states||[])[0];
-  const tags=(story.tags||[]).filter(t=>t!=='Big Game').slice(0,2).join(' and ').toLowerCase();
-  return `${where?where+' • ':''}${tags?`A ${tags} development`:'An outdoor development'} reported by ${story.source}.`;
+  const title=story.title.replace(/\s+-\s+[^-]{2,60}$/,'').trim();
+  const source=story.source||'the source';
+  return `${where?where+': ':''}${title}. Reported by ${source}.`;
+}
+function clusterSummary(cluster) {
+  const articles=cluster.articles||[];
+  if(!articles.length) return cluster.summary||'';
+  const lead=[...articles].sort((a,b)=>b.importance-a.importance || new Date(b.publishedAt)-new Date(a.publishedAt))[0];
+  const facts=[];
+  for(const a of articles){
+    const f=bestFactSentence(a); if(f && !facts.some(x=>jaccard(x,f)>.62)) facts.push(f);
+    if(facts.length>=2) break;
+  }
+  if(facts.length===2){
+    let text=`${facts[0]} ${facts[1]}`;
+    if(text.length>430) text=text.slice(0,427).replace(/\s+\S*$/,'')+'…';
+    return text;
+  }
+  return facts[0] || summarize(lead);
 }
 function whyCare(story) {
   const tags=new Set(story.tags||[]), state=(story.states||[])[0];
-  const prefix=state?`For hunters and anglers watching ${state}, `:'For hunters and anglers, ';
-  if(tags.has('Regulations')) return `${prefix}this could affect season structure, tags, licenses, quotas, access, or application planning. Check the original source before making hunt plans.`;
-  if(tags.has('Research') && tags.has('Elk')) return `${prefix}this may change how managers and hunters understand elk population trends, movement, recruitment, habitat use, or mortality.`;
-  if(tags.has('Research') && tags.has('Mule Deer')) return `${prefix}this may inform mule-deer population, migration, habitat, or survival decisions that ultimately shape future opportunity.`;
-  if(tags.has('Research') && tags.has('Whitetail')) return `${prefix}this may affect how whitetail health, habitat, disease, recruitment, or management trends are interpreted.`;
-  if(tags.has('Wolves & Predators')) return `${prefix}predator distribution and management can influence prey behavior, wildlife policy, livestock conflict, and hunting regulations.`;
-  if(tags.has('Conservation')) return `${prefix}habitat, access, migration corridors, public-land policy, and restoration work can directly affect where wildlife lives and where people can hunt or fish.`;
-  if(tags.has('Fishing')) return `${prefix}this may affect fisheries, access, habitat, stocking, regulations, or current angling opportunity.`;
-  if(tags.has('Elk')) return `${prefix}this is directly relevant to elk populations, habitat, access, management, or hunting opportunity.`;
-  if(tags.has('Mule Deer')) return `${prefix}this is directly relevant to mule-deer populations, habitat, migration, management, or hunting opportunity.`;
-  if(tags.has('Whitetail')) return `${prefix}this is directly relevant to whitetail populations, habitat, health, management, or hunting opportunity.`;
-  return `${prefix}this development may affect wildlife management, habitat, access, or future hunting and fishing opportunity.`;
+  const text=`${story.title} ${story.description||''}`.toLowerCase();
+  const prefix=state?`For hunters and anglers in ${state}, `:'For hunters and anglers, ';
+  if(/roadless|national forest|forest service|land transfer|land sale|public land|public lands|wilderness/.test(text)) return `${prefix}this can change habitat protection, road development, motorized access, timber or mineral activity, and the character of public ground used for hunting and fishing.`;
+  if(/wildfire|closure|closed|reopen|reopening/.test(text)) return `${prefix}this can immediately change access, trail or road availability, habitat conditions, and where hunting or fishing can legally occur.`;
+  if(/cwd|chronic wasting|ehd|disease/.test(text)) return `${prefix}disease changes can affect herd health, carcass-transport rules, testing requirements, local abundance, and future management decisions.`;
+  if(/tag|license|draw|quota|season|permit|application/.test(text)) return `${prefix}this may directly change when you can hunt, how many licenses are available, application strategy, or where tags can be used.`;
+  if(/wolf|wolves|cougar|mountain lion|grizzly|predator/.test(text)) return `${prefix}predator-management changes can affect hunting rules, prey distribution, livestock conflict, and how agencies manage deer and elk herds.`;
+  if(tags.has('Research')) return `${prefix}the findings may influence future population estimates, habitat priorities, season setting, or management decisions.`;
+  if(tags.has('Conservation')) return `${prefix}the decision can affect habitat quality, migration, access, or the amount and condition of land available to wildlife and recreation.`;
+  if(tags.has('Fishing')) return `${prefix}this may affect fish populations, water access, habitat, stocking, or fishing regulations.`;
+  if(tags.has('Elk')) return `${prefix}this is directly relevant to elk abundance, habitat, movement, access, or hunting opportunity.`;
+  if(tags.has('Mule Deer')) return `${prefix}this is directly relevant to mule-deer abundance, migration, habitat, access, or hunting opportunity.`;
+  if(tags.has('Whitetail')) return `${prefix}this is directly relevant to whitetail abundance, habitat, disease, or hunting opportunity.`;
+  return `${prefix}this may affect wildlife management, habitat, access, or future hunting and fishing opportunity.`;
 }
 function importanceScore(story) {
   let s=story.relevance||0;
@@ -332,39 +427,44 @@ function importanceScore(story) {
 function clusterStories(stories) {
   const sorted=[...stories].sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt));
   const clusters=[];
-  for(const st of sorted){
+  for(const original of sorted){
+    const st={...original,eventSig:eventSignature(original)};
     let best=null,bestScore=0;
     for(const c of clusters){
       const age=Math.abs(new Date(st.publishedAt)-new Date(c.publishedAt))/864e5;
-      if(age>5) continue;
-      const sim=jaccard(st.title,c.title);
-      const stateOverlap=(st.states||[]).some(x=>(c.states||[]).includes(x));
-      const tagOverlap=(st.tags||[]).filter(x=>x!=='Big Game').some(x=>(c.tags||[]).includes(x));
-      const score=sim+(stateOverlap?.08:0)+(tagOverlap?.06:0);
-      if(score>bestScore){bestScore=score;best=c;}
+      if(age>8) continue;
+      const sim=eventSimilarity(st,c);
+      if(sim>bestScore){bestScore=sim;best=c;}
     }
-    if(best && bestScore>=0.42){
+    if(best && bestScore>=0.46){
       best.articles.push(st);
       best.sources=[...new Set(best.articles.map(x=>x.source))];
       best.tags=[...new Set(best.articles.flatMap(x=>x.tags||[]))];
       best.states=[...new Set(best.articles.flatMap(x=>x.states||[]))].slice(0,5);
-      if(new Date(st.publishedAt)>new Date(best.publishedAt)){
-        best.title=st.title; best.link=st.link; best.publishedAt=st.publishedAt; best.source=st.source;
-        best.summary=st.summary; best.whyCare=st.whyCare;
-      }
+      // Keep a representative headline from the highest-importance article rather than simply the newest.
+      const representative=[...best.articles].sort((a,b)=>b.importance-a.importance || new Date(b.publishedAt)-new Date(a.publishedAt))[0];
+      best.title=representative.title; best.link=representative.link; best.source=representative.source;
+      best.publishedAt=[...best.articles].sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt))[0].publishedAt;
       best.relevance=Math.max(best.relevance,st.relevance);
       best.importance=Math.max(best.importance,st.importance);
+      best.whyCare=whyCare({...representative,tags:best.tags,states:best.states});
+      best.summary=clusterSummary(best);
+      best.eventSig=eventSignature(best);
     } else {
       clusters.push({
-        id:`c${clusters.length+1}`,...st,articles:[st],sources:[st.source],importance:st.importance
+        id:`c${clusters.length+1}`,...st,articles:[st],sources:[st.source],importance:st.importance,eventSig:st.eventSig
       });
     }
   }
   for(const c of clusters){
+    c.summary=clusterSummary(c);
+    c.whyCare=whyCare(c);
     const sourceBoost=Math.min(18,(c.sources.length-1)*6);
     c.clusterScore=Math.min(99,Math.round(c.score+sourceBoost));
     c.sourceCount=c.sources.length;
     c.articleCount=c.articles.length;
+    delete c.eventSig;
+    for(const a of c.articles) delete a.eventSig;
   }
   return clusters;
 }
@@ -386,7 +486,7 @@ function buildSnapshot(stories, clusters){
 
 async function fetchQuery(feed) {
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(feed.query)}&hl=en-US&gl=US&ceid=US:en`;
-  const r = await fetch(url, { headers: { 'user-agent':'OutdoorIntel/3.3 (+local dashboard)' }, signal: AbortSignal.timeout(4500) });
+  const r = await fetch(url, { headers: { 'user-agent':'OutdoorIntel/3.4 (+local dashboard)' }, signal: AbortSignal.timeout(4500) });
   if (!r.ok) throw new Error(`${feed.name}: ${r.status}`);
   const xml = await r.text();
   return parseRss(xml, feed.forceSource ? feed.name : '').slice(0,12).map(st => ({...st, queryGroup:feed.name, stateHint:feed.stateHint || ''}));
@@ -454,13 +554,13 @@ const server = http.createServer(async (req,res) => {
         uniqueSourceCount:uniqueSources.size,
         stateAgencyCount:stateAgencies.length,
         states,
-        version:'3.3.0',
+        version:'3.4.0',
         feedErrors:data.errors.length
       }));
     }
     if (u.pathname === '/health') {
       res.writeHead(200, {'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true, version:'3.3-production', refreshedAt:cache.at?new Date(cache.at).toISOString():null, stories:cache.stories.length, refreshMinutes:REFRESH_MINUTES}));
+      return res.end(JSON.stringify({ok:true, version:'3.4-production', refreshedAt:cache.at?new Date(cache.at).toISOString():null, stories:cache.stories.length, refreshMinutes:REFRESH_MINUTES}));
     }
     if (u.pathname === '/robots.txt') {
       const site=(process.env.SITE_URL||'').replace(/\/$/,'');
@@ -485,7 +585,7 @@ const server = http.createServer(async (req,res) => {
   }
 });
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\nOutdoor Intel 3.3 production → http://0.0.0.0:${PORT}\nWatching ${allFeeds.length} discovery feeds across ${stateAgencies.length} state wildlife agencies.\nAutomatic refresh: every ${REFRESH_MINUTES} minutes.\n`);
+  console.log(`\nOutdoor Intel 3.4 production → http://0.0.0.0:${PORT}\nWatching ${allFeeds.length} discovery feeds across ${stateAgencies.length} state wildlife agencies.\nAutomatic refresh: every ${REFRESH_MINUTES} minutes.\n`);
   void scheduledRefresh();
   const timer=setInterval(() => void scheduledRefresh(), REFRESH_MINUTES*60*1000);
   timer.unref?.();
