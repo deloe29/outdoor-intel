@@ -179,7 +179,20 @@ const speciesStateQueries = Object.entries(speciesStateCoverage).flatMap(([speci
   }))
 );
 
-const allFeeds = [...publisherQueries, ...stateAgencies, ...directStateQueries, ...broadQueries, ...hunterImpactQueries, ...speciesStateQueries];
+// Free hunting-strategy discovery. These searches target practical, publicly readable how-to,
+// scouting, calling, terrain, rut, public-land and species tactics from established outdoor publishers.
+const strategyQueries = [
+  {name:'onX Strategy Feed',sourceName:'onX Hunt',query:'site:onxmaps.com/hunt/blog ("how to hunt" OR tactics OR strategy OR scouting OR calling OR glassing OR "public land") (elk OR whitetail OR "mule deer" OR deer OR "big game") when:365d',forceSource:true},
+  {name:'Outdoor Life Strategy Feed',sourceName:'Outdoor Life',query:'site:outdoorlife.com/hunting ("how to" OR tips OR tactics OR strategy OR scouting OR calling OR glassing) (elk OR whitetail OR "mule deer" OR deer OR "big game") when:365d',forceSource:true},
+  {name:'Field & Stream Strategy Feed',sourceName:'Field & Stream',query:'site:fieldandstream.com/stories/hunting ("how to" OR tips OR tactics OR strategy OR scouting OR calling OR glassing OR "public land") (elk OR whitetail OR "mule deer" OR deer OR "big game") when:365d',forceSource:true},
+  {name:'GOHUNT Strategy Feed',sourceName:'GOHUNT',query:'site:gohunt.com/browse ("tips and tricks" OR "how to" OR tactics OR strategy OR scouting OR glassing OR topo OR calling) (elk OR "mule deer" OR deer OR "big game") when:365d',forceSource:true},
+  {name:'MeatEater Strategy Feed',sourceName:'MeatEater',query:'site:themeateater.com/hunt ("how to" OR tips OR tactics OR strategy OR scouting OR calling OR glassing OR whitetail OR elk OR "mule deer") when:365d',forceSource:true},
+  {name:'National Deer Association Strategy Feed',sourceName:'National Deer Association',query:'site:deerassociation.com (how OR tips OR tactics OR strategy OR scouting OR habitat OR rut) (whitetail OR deer OR hunting) when:365d',forceSource:true},
+  {name:'RMEF Elk Strategy Feed',sourceName:'Rocky Mountain Elk Foundation',query:'site:rmef.org (elk hunting OR elk calling OR elk scouting OR elk tactics OR elk tips) when:365d',forceSource:true},
+  {name:'Hunting Strategy Wire',query:'("elk hunting tips" OR "elk hunting tactics" OR "mule deer hunting tips" OR "mule deer hunting tactics" OR "whitetail hunting tips" OR "whitetail hunting tactics" OR "deer hunting strategy" OR "public land hunting tips") when:365d'}
+];
+
+const allFeeds = [...publisherQueries, ...stateAgencies, ...directStateQueries, ...broadQueries, ...hunterImpactQueries, ...speciesStateQueries, ...strategyQueries];
 
 const taxonomy = {
   'Elk': ['elk','wapiti'],
@@ -190,6 +203,7 @@ const taxonomy = {
   'Fishing': ['fishing','fishery','fisheries','angler','trout','bass','salmon','walleye','steelhead','crappie','catfish'],
   'Conservation': ['conservation','habitat','public land','public lands','migration corridor','wildlife crossing','winter range','access','restoration','roadless','national forest','national forests','wilderness','forest management','logging','land management','easement','land transfer','land sale','wildfire','drought','water','streamflow','snowpack','drilling','mining','energy development','grazing','crp','farm bill'],
   'Regulations': ['regulation','season','draw','tag','license','quota','legislation','bill','law','ban','rule change','application deadline','permit','proposed rule','final rule','rulemaking','federal register','public comment','repeal','rescind','rescission','court','lawsuit','ruling','injunction','ballot','initiative','referendum','closure','closed','reopening','delist','delisting'],
+  'Hunting Strategy': ['how to hunt','hunting tips','hunting tactics','hunt strategy','hunting strategy','scouting','e-scouting','glassing','calling tips','calling sequence','public land hunting','patterning','rut tactics','stand placement','spot and stalk','spot-and-stalk','reading topo','thermals','playing the wind','deer sign'],
   'Research': ['study','research','survey','population estimate','mortality','recruitment','migration','disease','cwd','ehd','chronic wasting']
 };
 
@@ -213,9 +227,23 @@ let cache = { at: 0, stories: [], clusters: [], snapshot: {}, errors: [] };
 let refreshInFlight = null;
 
 function decode(s='') {
-  return s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1')
-    .replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'")
-    .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  const named = {
+    amp:'&',quot:'"',apos:"'",lt:'<',gt:'>',nbsp:' ',ndash:'–',mdash:'—',hellip:'…',lsquo:'‘',rsquo:'’',ldquo:'“',rdquo:'”'
+  };
+  let out = s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1')
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi,(m,entity)=>{
+      const e=entity.toLowerCase();
+      if(e[0]==='#'){
+        const n=e[1]==='x'?parseInt(e.slice(2),16):parseInt(e.slice(1),10);
+        return Number.isFinite(n)?String.fromCodePoint(n):' ';
+      }
+      return Object.prototype.hasOwnProperty.call(named,e)?named[e]:' ';
+    })
+    .replace(/<[^>]+>/g,' ')
+    .replace(/[\u00a0\u2007\u202f]/g,' ')
+    .replace(/â€™/g,'’').replace(/â€œ/g,'“').replace(/â€/g,'”').replace(/â€“/g,'–').replace(/â€”/g,'—')
+    .replace(/\s+/g,' ').trim();
+  return out;
 }
 function tag(xml, name) {
   const m = xml.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)<\\/${name}>`, 'i'));
@@ -294,7 +322,7 @@ function jaccard(a,b) {
   return inter/(A.size+B.size-inter);
 }
 function cleanText(text='') {
-  return text.replace(/\s+/g,' ').replace(/\s+([,.!?;:])/g,'$1').trim();
+  return decode(String(text||'')).replace(/\s+/g,' ').replace(/\s+([,.!?;:])/g,'$1').trim();
 }
 function sentences(text='') {
   return cleanText(text).split(/(?<=[.!?])\s+/).map(x=>x.trim()).filter(Boolean);
@@ -360,61 +388,78 @@ function eventSimilarity(a,b) {
   if(action>=1 && A.actions.length && B.actions.length) score+=.08;
   return Math.min(1,score);
 }
+function sentenceQuality(s, story) {
+  const low=s.toLowerCase();
+  if(/sign up|newsletter|subscribe|read more|click here|terms of service|privacy policy|advertisement/.test(low)) return -100;
+  const titleWords=words(story.title||'');
+  const ws=words(s); let overlap=0; for(const w of ws) if(titleWords.has(w)) overlap++;
+  const concrete=(s.match(/\b(?:\d[\d,.]*|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|acres?|percent|%|million|billion|miles?|yards?|feet|ft\.?|AM|PM)\b/gi)||[]).length;
+  const actions=actionHits(s).length;
+  const strategy=/\b(?:find|locate|hunt|scout|glass|call|approach|set up|setup|pattern|bed|feed|wind|thermal|terrain|ridge|bench|drainage|rut|stalk|stand|trail|sign|pressure|access|public land)\b/i.test(s)?2:0;
+  return overlap*1.5+concrete*2+actions*2+strategy+Math.min(2,s.length/130);
+}
+function usefulSentences(story) {
+  return sentences(story.description||'')
+    .map(cleanText)
+    .filter(s=>s.length>=38 && s.toLowerCase()!==cleanText(story.title).toLowerCase())
+    .filter(s=>sentenceQuality(s,story)>-50);
+}
 function bestFactSentence(story) {
-  const candidates=sentences(story.description||'').filter(s=>s.length>=45 && s.toLowerCase()!==story.title.toLowerCase());
+  const candidates=usefulSentences(story);
   if(!candidates.length) return '';
-  const titleWords=words(story.title);
-  const score=s=>{
-    const ws=words(s); let overlap=0; for(const w of ws) if(titleWords.has(w)) overlap++;
-    const concrete=(s.match(/\b(?:\d[\d,.]*|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|January|February|March|April|May|June|July|August|September|October|November|December|acres?|percent|%|million|billion)\b/gi)||[]).length;
-    const actions=actionHits(s).length;
-    return overlap*2+concrete*2+actions*2+Math.min(2,s.length/120);
-  };
-  return [...candidates].sort((a,b)=>score(b)-score(a))[0];
+  return [...candidates].sort((a,b)=>sentenceQuality(b,story)-sentenceQuality(a,story))[0];
 }
 function summarize(story) {
-  const fact=bestFactSentence(story);
-  if(fact) {
-    const clipped=fact.length>330 ? fact.slice(0,327).replace(/\s+\S*$/,'')+'…' : fact;
-    return /[.!?…]$/.test(clipped)?clipped:clipped+'.';
+  const candidates=usefulSentences(story).sort((a,b)=>sentenceQuality(b,story)-sentenceQuality(a,story));
+  const chosen=[];
+  for(const s of candidates){
+    if(!chosen.some(x=>jaccard(x,s)>.58)) chosen.push(s);
+    if(chosen.length>=2) break;
   }
-  const where=(story.states||[])[0];
-  const title=story.title.replace(/\s+-\s+[^-]{2,60}$/,'').trim();
-  const source=story.source||'the source';
-  return `${where?where+': ':''}${title}. Reported by ${source}.`;
+  let text=chosen.join(' ');
+  if(!text){
+    const where=(story.states||[])[0];
+    text=`${where?where+': ':''}${cleanText(story.title)}.`;
+  }
+  if(text.length>440) text=text.slice(0,437).replace(/\s+\S*$/,'')+'…';
+  return /[.!?…]$/.test(text)?text:text+'.';
 }
 function clusterSummary(cluster) {
   const articles=cluster.articles||[];
   if(!articles.length) return cluster.summary||'';
-  const lead=[...articles].sort((a,b)=>b.importance-a.importance || new Date(b.publishedAt)-new Date(a.publishedAt))[0];
-  const facts=[];
+  const ranked=[];
   for(const a of articles){
-    const f=bestFactSentence(a); if(f && !facts.some(x=>jaccard(x,f)>.62)) facts.push(f);
-    if(facts.length>=2) break;
+    for(const s of usefulSentences(a)) ranked.push({s,a,q:sentenceQuality(s,a)});
   }
-  if(facts.length===2){
-    let text=`${facts[0]} ${facts[1]}`;
-    if(text.length>430) text=text.slice(0,427).replace(/\s+\S*$/,'')+'…';
-    return text;
+  ranked.sort((a,b)=>b.q-a.q);
+  const chosen=[];
+  for(const item of ranked){
+    if(!chosen.some(x=>jaccard(x,item.s)>.58)) chosen.push(item.s);
+    if(chosen.length>=2) break;
   }
-  return facts[0] || summarize(lead);
+  if(!chosen.length){
+    const lead=[...articles].sort((a,b)=>b.importance-a.importance || new Date(b.publishedAt)-new Date(a.publishedAt))[0];
+    return summarize(lead);
+  }
+  let text=chosen.join(' ');
+  if(text.length>470) text=text.slice(0,467).replace(/\s+\S*$/,'')+'…';
+  return text;
 }
-function whyCare(story) {
-  const tags=new Set(story.tags||[]), state=(story.states||[])[0];
+function articleContext(story) {
   const text=`${story.title} ${story.description||''}`.toLowerCase();
-  const prefix=state?`For hunters and anglers in ${state}, `:'For hunters and anglers, ';
-  if(/roadless|national forest|forest service|land transfer|land sale|public land|public lands|wilderness/.test(text)) return `${prefix}this can change habitat protection, road development, motorized access, timber or mineral activity, and the character of public ground used for hunting and fishing.`;
-  if(/wildfire|closure|closed|reopen|reopening/.test(text)) return `${prefix}this can immediately change access, trail or road availability, habitat conditions, and where hunting or fishing can legally occur.`;
-  if(/cwd|chronic wasting|ehd|disease/.test(text)) return `${prefix}disease changes can affect herd health, carcass-transport rules, testing requirements, local abundance, and future management decisions.`;
-  if(/tag|license|draw|quota|season|permit|application/.test(text)) return `${prefix}this may directly change when you can hunt, how many licenses are available, application strategy, or where tags can be used.`;
-  if(/wolf|wolves|cougar|mountain lion|grizzly|predator/.test(text)) return `${prefix}predator-management changes can affect hunting rules, prey distribution, livestock conflict, and how agencies manage deer and elk herds.`;
-  if(tags.has('Research')) return `${prefix}the findings may influence future population estimates, habitat priorities, season setting, or management decisions.`;
-  if(tags.has('Conservation')) return `${prefix}the decision can affect habitat quality, migration, access, or the amount and condition of land available to wildlife and recreation.`;
-  if(tags.has('Fishing')) return `${prefix}this may affect fish populations, water access, habitat, stocking, or fishing regulations.`;
-  if(tags.has('Elk')) return `${prefix}this is directly relevant to elk abundance, habitat, movement, access, or hunting opportunity.`;
-  if(tags.has('Mule Deer')) return `${prefix}this is directly relevant to mule-deer abundance, migration, habitat, access, or hunting opportunity.`;
-  if(tags.has('Whitetail')) return `${prefix}this is directly relevant to whitetail abundance, habitat, disease, or hunting opportunity.`;
-  return `${prefix}this may affect wildlife management, habitat, access, or future hunting and fishing opportunity.`;
+  if((story.tags||[]).includes('Hunting Strategy')){
+    if(/elk/.test(text)) return 'Practical elk tactics, scouting, calling, terrain or hunt-planning guidance from the source.';
+    if(/mule deer|muley/.test(text)) return 'Practical mule-deer tactics covering scouting, glassing, terrain, stalking or seasonal behavior.';
+    if(/whitetail|white-tailed/.test(text)) return 'Practical whitetail tactics covering patterning, sign, stand or access strategy, wind, rut behavior or scouting.';
+    return 'Practical hunting tactics or planning guidance from the source.';
+  }
+  if(/roadless|national forest|forest service|land transfer|land sale|public land|public lands|wilderness/.test(text)) return 'Public-land policy or access development with potential consequences for habitat, roads and recreation.';
+  if(/tag|license|draw|quota|season|permit|application/.test(text)) return 'Hunting-opportunity update involving tags, seasons, applications, quotas or permits.';
+  if(/cwd|chronic wasting|ehd|disease/.test(text)) return 'Wildlife-health development involving disease, testing, herd condition or management response.';
+  if(/wolf|wolves|cougar|mountain lion|grizzly|predator/.test(text)) return 'Predator-management or predator-prey development.';
+  if((story.tags||[]).includes('Research')) return 'Wildlife research or population-management finding.';
+  if((story.tags||[]).includes('Fishing')) return 'Fishing, fisheries or aquatic-habitat update.';
+  return 'Outdoor news development summarized from the publisher’s available feed text.';
 }
 function importanceScore(story) {
   let s=story.relevance||0;
@@ -447,7 +492,7 @@ function clusterStories(stories) {
       best.publishedAt=[...best.articles].sort((a,b)=>new Date(b.publishedAt)-new Date(a.publishedAt))[0].publishedAt;
       best.relevance=Math.max(best.relevance,st.relevance);
       best.importance=Math.max(best.importance,st.importance);
-      best.whyCare=whyCare({...representative,tags:best.tags,states:best.states});
+      best.context=articleContext({...representative,tags:best.tags,states:best.states});
       best.summary=clusterSummary(best);
       best.eventSig=eventSignature(best);
     } else {
@@ -458,7 +503,7 @@ function clusterStories(stories) {
   }
   for(const c of clusters){
     c.summary=clusterSummary(c);
-    c.whyCare=whyCare(c);
+    c.context=articleContext(c);
     const sourceBoost=Math.min(18,(c.sources.length-1)*6);
     c.clusterScore=Math.min(99,Math.round(c.score+sourceBoost));
     c.sourceCount=c.sources.length;
@@ -486,10 +531,10 @@ function buildSnapshot(stories, clusters){
 
 async function fetchQuery(feed) {
   const url = `https://news.google.com/rss/search?q=${encodeURIComponent(feed.query)}&hl=en-US&gl=US&ceid=US:en`;
-  const r = await fetch(url, { headers: { 'user-agent':'OutdoorIntel/3.4 (+local dashboard)' }, signal: AbortSignal.timeout(4500) });
+  const r = await fetch(url, { headers: { 'user-agent':'OutdoorIntel/3.5 (+local dashboard)' }, signal: AbortSignal.timeout(4500) });
   if (!r.ok) throw new Error(`${feed.name}: ${r.status}`);
   const xml = await r.text();
-  return parseRss(xml, feed.forceSource ? feed.name : '').slice(0,12).map(st => ({...st, queryGroup:feed.name, stateHint:feed.stateHint || ''}));
+  return parseRss(xml, feed.forceSource ? (feed.sourceName || feed.name) : '').slice(0,12).map(st => ({...st, queryGroup:feed.name, stateHint:feed.stateHint || ''}));
 }
 async function mapConcurrent(items, limit, fn) {
   const results = new Array(items.length);
@@ -515,8 +560,9 @@ async function refresh(force=false) {
   const normalized = dedupe(stories)
     .filter(st => Number.isFinite(new Date(st.pubDate).getTime()) && new Date(st.pubDate).getTime() >= cutoff)
     .map(st => {
-      const base={...st,tags:classify(st),states:classifyStates(st),relevance:relevanceScore(st),score:topScore(st),publishedAt:new Date(st.pubDate).toISOString()};
-      return {...base,importance:importanceScore(base),summary:summarize(base),whyCare:whyCare(base)};
+      const derivedTags=classify(st); if(/strategy/i.test(st.queryGroup||'') && !derivedTags.includes('Hunting Strategy')) derivedTags.unshift('Hunting Strategy');
+      const base={...st,tags:derivedTags,states:classifyStates(st),relevance:relevanceScore(st),score:topScore(st),publishedAt:new Date(st.pubDate).toISOString()};
+      return {...base,importance:importanceScore(base),summary:summarize(base),context:articleContext(base)};
     })
     .sort((a,b)=> new Date(b.publishedAt)-new Date(a.publishedAt))
     .slice(0,MAX_STORIES);
@@ -554,13 +600,13 @@ const server = http.createServer(async (req,res) => {
         uniqueSourceCount:uniqueSources.size,
         stateAgencyCount:stateAgencies.length,
         states,
-        version:'3.4.0',
+        version:'3.5.0',
         feedErrors:data.errors.length
       }));
     }
     if (u.pathname === '/health') {
       res.writeHead(200, {'content-type':'application/json; charset=utf-8','cache-control':'no-store'});
-      return res.end(JSON.stringify({ok:true, version:'3.4-production', refreshedAt:cache.at?new Date(cache.at).toISOString():null, stories:cache.stories.length, refreshMinutes:REFRESH_MINUTES}));
+      return res.end(JSON.stringify({ok:true, version:'3.5-production', refreshedAt:cache.at?new Date(cache.at).toISOString():null, stories:cache.stories.length, refreshMinutes:REFRESH_MINUTES}));
     }
     if (u.pathname === '/robots.txt') {
       const site=(process.env.SITE_URL||'').replace(/\/$/,'');
@@ -585,7 +631,7 @@ const server = http.createServer(async (req,res) => {
   }
 });
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\nOutdoor Intel 3.4 production → http://0.0.0.0:${PORT}\nWatching ${allFeeds.length} discovery feeds across ${stateAgencies.length} state wildlife agencies.\nAutomatic refresh: every ${REFRESH_MINUTES} minutes.\n`);
+  console.log(`\nOutdoor Intel 3.5 production → http://0.0.0.0:${PORT}\nWatching ${allFeeds.length} discovery feeds across ${stateAgencies.length} state wildlife agencies.\nAutomatic refresh: every ${REFRESH_MINUTES} minutes.\n`);
   void scheduledRefresh();
   const timer=setInterval(() => void scheduledRefresh(), REFRESH_MINUTES*60*1000);
   timer.unref?.();

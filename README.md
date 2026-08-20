@@ -53,3 +53,12 @@ Version 3.4 clusters coverage by the underlying event rather than relying mainly
 
 ### Summary upgrade
 Summaries now prefer concrete factual sentences containing the actors, action, place, numbers/dates, and consequences. Cluster summaries can combine distinct facts from multiple outlets while still linking readers to the original publishers. The “Why hunters should care” text is also selected from story-specific signals such as access, public lands, disease, tags, closures, predators, habitat, and research instead of generic category boilerplate.
+
+
+## v3.5 changes
+
+- The feed initially displays 10 events/stories and reveals 10 more with **Load 10 more**.
+- Added a dedicated **Hunting Strategy** tab for practical, free-to-discover tactics and how-to material from sources such as onX Hunt, Outdoor Life, Field & Stream, GOHUNT, MeatEater, National Deer Association, and RMEF.
+- Hunting Strategy defaults to the one-year window because tactics content is evergreen rather than breaking news.
+- Replaced generic “Why hunters should care” copy with article-specific summaries built from the concrete facts available in each feed item.
+- Expanded HTML/entity sanitation so `&nbsp;`, numeric non-breaking spaces, smart punctuation entities, markup, and common encoding artifacts do not leak into visible copy.

@@ -1,12 +1,13 @@
-const tabs=['All','Elk','Whitetail','Mule Deer','Big Game','Wolves & Predators','Fishing','Conservation','Regulations','Research','Metrics'];
-let active='All', stories=[], clusters=[], snapshot={};
+const tabs=['All','Elk','Whitetail','Mule Deer','Big Game','Wolves & Predators','Fishing','Conservation','Regulations','Research','Hunting Strategy','Metrics'];
+let active='All', stories=[], clusters=[], snapshot={}, visibleCount=10;
 const $=s=>document.querySelector(s);
-const esc=s=>(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tidy=s=>String(s||'').replace(/&nbsp;|&#160;|&#xA0;/gi,' ').replace(/[\u00a0\u2007\u202f]/g,' ').replace(/\s+/g,' ').trim();
+const esc=s=>tidy(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ago=d=>{const m=Math.floor((Date.now()-new Date(d))/60000);if(m<60)return `${Math.max(1,m)}m ago`;const h=Math.floor(m/60);if(h<24)return `${h}h ago`;const days=Math.floor(h/24);if(days<30)return `${days}d ago`;return `${Math.floor(days/30)}mo ago`};
 
 function renderTabs(){
   $('#tabs').innerHTML=tabs.map(t=>`<button class="${t===active?'active':''}" data-tab="${t}">${t}</button>`).join('');
-  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{active=b.dataset.tab;renderTabs();render();});
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{active=b.dataset.tab;visibleCount=10;if(active==='Hunting Strategy')$('#timeFilter').value='365';renderTabs();render();});
 }
 function inWindow(item,v){if(v==='all')return true;return Date.now()-new Date(item.publishedAt).getTime()<=Number(v)*864e5}
 function haystack(x){return `${x.title} ${x.summary||x.description||''} ${x.source||''} ${(x.sources||[]).join(' ')} ${(x.tags||[]).join(' ')} ${(x.states||[]).join(' ')}`.toLowerCase()}
@@ -28,9 +29,9 @@ function sourcesBlock(x){
 }
 function meta(x){const multi=(x.sourceCount||1)>1?`<span class="multi">${x.sourceCount} SOURCES</span>`:'';return `<div class="meta"><span class="source">${esc(x.source)}</span><span>${ago(x.publishedAt)}</span>${multi}<span class="score">${scoreLabel(x)}</span></div>`}
 function card(x,rank,lead=false){
-  const summary=esc(x.summary||x.description||''); const care=esc(x.whyCare||'');
-  if(lead)return `<article class="lead-card">${meta(x)}<h3><a href="${x.link}" target="_blank" rel="noopener">${esc(x.title)}</a></h3><div class="summary">${summary}</div><div class="care"><b>WHY HUNTERS SHOULD CARE</b><p>${care}</p></div><div class="tagrow">${pills(x)}</div>${sourcesBlock(x)}</article>`;
-  return `<article class="story"><div class="rank">${String(rank).padStart(2,'0')}</div><div>${meta(x)}<h3><a href="${x.link}" target="_blank" rel="noopener">${esc(x.title)}</a></h3><p>${summary}</p><div class="care compact"><b>WHY IT MATTERS</b><p>${care}</p></div><div class="tagrow">${pills(x)}</div>${sourcesBlock(x)}</div></article>`;
+  const summary=esc(x.summary||x.description||'');
+  if(lead)return `<article class="lead-card">${meta(x)}<h3><a href="${x.link}" target="_blank" rel="noopener">${esc(x.title)}</a></h3><div class="article-summary"><b>ARTICLE SUMMARY</b><p>${summary}</p></div><div class="tagrow">${pills(x)}</div>${sourcesBlock(x)}</article>`;
+  return `<article class="story"><div class="rank">${String(rank).padStart(2,'0')}</div><div>${meta(x)}<h3><a href="${x.link}" target="_blank" rel="noopener">${esc(x.title)}</a></h3><div class="article-summary compact"><b>ARTICLE SUMMARY</b><p>${summary}</p></div><div class="tagrow">${pills(x)}</div>${sourcesBlock(x)}</div></article>`;
 }
 function renderList(id,arr){
   $(id).innerHTML=(arr||[]).length?(arr||[]).map(x=>`<a href="${x.link}" target="_blank" rel="noopener"><small>${esc((x.states||[])[0]||x.source)} • ${ago(x.publishedAt)}</small><span>${esc(x.title)}</span></a>`).join(''):'<span class="muted">No recent signals.</span>';
@@ -44,10 +45,14 @@ function render(){
     return;
   }
   const arr=current(), state=$('#stateFilter').value, mode=$('#viewMode').value;
+  const shown=arr.slice(0,visibleCount);
   $('#feedTitle').textContent=state?`${state} • ${active==='All'?'All Outdoor':active}`:(active==='All'?'Latest intelligence':active);
-  $('#resultCount').textContent=`${arr.length} ${mode==='clusters'?'events':'stories'}`;
-  $('#lead').innerHTML=arr[0]?card(arr[0],1,true):'<div class="empty">No stories match these filters.</div>';
-  $('#stories').innerHTML=arr.slice(1).map((x,i)=>card(x,i+2)).join('');
+  $('#resultCount').textContent=arr.length?`Showing ${shown.length} of ${arr.length} ${mode==='clusters'?'events':'stories'}`:`0 ${mode==='clusters'?'events':'stories'}`;
+  $('#lead').innerHTML=shown[0]?card(shown[0],1,true):'<div class="empty">No stories match these filters.</div>';
+  $('#stories').innerHTML=shown.slice(1).map((x,i)=>card(x,i+2)).join('');
+  const more=$('#loadMore');
+  more.hidden=shown.length>=arr.length;
+  more.textContent=`Load 10 more ${mode==='clusters'?'events':'stories'}`;
 }
 function renderMetricsTopics(){
   const counts={};stories.filter(x=>inWindow(x,'7')).forEach(x=>(x.tags||[]).forEach(t=>counts[t]=(counts[t]||0)+1));
@@ -78,4 +83,4 @@ async function load(force=false){
   }catch(e){$('#status').textContent='Feed unavailable';$('#lead').innerHTML='<div class="empty">Could not load live feeds. Check your internet connection, then hit Refresh.</div>'}
   finally{$('#refresh').disabled=false}
 }
-renderTabs();$('#search').oninput=render;['sourceFilter','stateFilter','timeFilter','sort','viewMode'].forEach(id=>$('#'+id).onchange=render);$('#refresh').onclick=()=>load(true);load();setInterval(()=>load(false),10*60*1000);
+renderTabs();$('#search').oninput=()=>{visibleCount=10;render()};['sourceFilter','stateFilter','timeFilter','sort','viewMode'].forEach(id=>$('#'+id).onchange=()=>{visibleCount=10;render()});$('#loadMore').onclick=()=>{visibleCount+=10;render()};$('#refresh').onclick=()=>load(true);load();setInterval(()=>load(false),10*60*1000);
